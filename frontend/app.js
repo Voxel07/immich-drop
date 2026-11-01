@@ -94,15 +94,19 @@ function addItem(file){
   render();
 }
 
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function render(){
   const itemsEl = document.getElementById('items');
   itemsEl.innerHTML = items.map(it => `
     <div class="rounded-2xl border bg-white dark:bg-gray-800 dark:border-gray-700 p-4 shadow-sm transition-colors">
       <div class="flex items-center justify-between">
         <div class="min-w-0">
-          <div class="truncate font-medium">${it.name} <span class="text-xs text-gray-500 dark:text-gray-400">(${human(it.size)})</span></div>
+          <div class="truncate font-medium">${esc(it.name)} <span class="text-xs text-gray-500 dark:text-gray-400">(${human(it.size)})</span></div>
           <div class="mt-1 text-xs text-gray-600 dark:text-gray-400">
-            ${it.message ? `<span>${it.message}</span>` : ''}
+            ${it.message ? `<span>${esc(it.message)}</span>` : ''}
           </div>
         </div>
         <div class="flex items-center gap-2 text-sm">

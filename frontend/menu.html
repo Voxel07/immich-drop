@@ -160,7 +160,7 @@
         const list = await r.json();
         if (Array.isArray(list)){
           const opts = [{id:'', name:'— No album —'}].concat(list.map(a => ({id:a.id, name:(a.albumName || a.title || a.id)})));
-          albumSelect.innerHTML = opts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+          albumSelect.innerHTML = opts.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
           albumSelectWrap.classList.remove('hidden');
           albumInputWrap.classList.remove('hidden');
           albumHint.textContent = 'Pick an existing album, or type a new name and click Create album. Select “— No album —” or leave the field blank to skip album association.';
@@ -250,6 +250,9 @@
       }catch{ INVITES = []; }
       renderInvites();
     }
+    function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    // yyyy-mm-dd in local time, for <input type=date>
+    function localDateStr(iso){ const d = new Date(iso); if (isNaN(d)) return ''; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
     function fmtDayMonth(iso){ try{ const d = new Date(iso); return d.toLocaleDateString(undefined,{ day:'2-digit', month:'short' }); }catch{return '—';} }
     function statusBadge(row){
       // Red reasons override disabled (yellow)
@@ -276,14 +279,14 @@
           <tr class="border-b dark:border-gray-800" data-token="${row.token}">
             <td class="py-2"><input class="chkRow" type="checkbox" data-token="${row.token}"/></td>
             <td class="py-2" style="width:45%;">
-              <input class="inName w-full rounded border px-2 py-1 bg-white dark:bg-gray-900 dark:border-gray-700" data-token="${row.token}" value="${(row.name||'').replaceAll('"','&quot;')}" title="${(row.name||'').replaceAll('"','&quot;')}"/>
+              <input class="inName w-full rounded border px-2 py-1 bg-white dark:bg-gray-900 dark:border-gray-700" data-token="${row.token}" value="${esc(row.name)}" title="${esc(row.name)}"/>
             </td>
             <td class="py-2">${status}</td>
             <td class="py-2">${uses}</td>
             <td class="py-2">
-              <input class="inExpires w-36 rounded border px-2 py-1 bg-white dark:bg-gray-900 dark:border-gray-700" type="date" data-token="${row.token}" value="${row.expiresAt? new Date(row.expiresAt).toISOString().slice(0,10):''}" title="${row.expiresAt? new Date(row.expiresAt).toLocaleString():''}"/>
+              <input class="inExpires w-36 rounded border px-2 py-1 bg-white dark:bg-gray-900 dark:border-gray-700" type="date" data-token="${row.token}" value="${row.expiresAt? localDateStr(row.expiresAt):''}" title="${row.expiresAt? new Date(row.expiresAt).toLocaleString():''}"/>
             </td>
-            <td class="py-2">${row.albumName || '—'}</td>
+            <td class="py-2">${row.albumName ? esc(row.albumName) : '—'}</td>
             <td class="py-2">
               <div class="flex items-center gap-1 whitespace-nowrap">
                 <button class="btnDetails group relative rounded-xl border px-2 py-1 text-xs dark:border-gray-600 inline-flex items-center" data-token="${row.token}" aria-label="Show details">
@@ -332,7 +335,7 @@
         const inName = invitesTBody.querySelector(`.inName[data-token="${token}"]`);
         const inExp = invitesTBody.querySelector(`.inExpires[data-token="${token}"]`);
         if (inName) inName.setAttribute('data-original', (row.name||'').trim());
-        const dStr = row.expiresAt? new Date(row.expiresAt).toISOString().slice(0,10) : '';
+        const dStr = row.expiresAt? localDateStr(row.expiresAt) : '';
         if (inExp) inExp.setAttribute('data-original', dStr);
         if (inName) inName.addEventListener('input', ()=>updateSaveState(token));
         if (inExp) inExp.addEventListener('change', ()=>updateSaveState(token));
@@ -347,8 +350,8 @@
         const payload = { name };
         if (expVal) {
           // Set to end-of-day local to avoid off-by-one day on save
-          const dt = new Date(expVal);
-          dt.setHours(23,59,59,999);
+          // ('yyyy-mm-ddThh:mm:ss' parses as local time; a bare date would parse as UTC)
+          const dt = new Date(`${expVal}T23:59:59`);
           payload.expiresAt = dt.toISOString().slice(0,19);
         } else { payload.expiresAt = null; }
         try{
@@ -371,7 +374,7 @@
                   <button class="dlgClose rounded-lg border px-2 py-1 text-xs dark:border-gray-600">Close</button>
                 </div>
                 <div class="max-h-[60vh] overflow-auto">
-                  ${items.length? `<table class="w-full text-sm"><thead><tr class="text-left border-b dark:border-gray-700"><th class="py-1">When</th><th class="py-1">IP</th><th class="py-1">Filename</th><th class="py-1">Size</th><th class="py-1">Fingerprint</th></tr></thead><tbody>` + items.map(it=>`<tr class="border-b dark:border-gray-800"><td class="py-1">${new Date(it.uploadedAt).toLocaleString()}</td><td class="py-1">${it.ip||''}</td><td class="py-1">${it.filename||''}</td><td class="py-1">${(it.size||0).toLocaleString()}</td><td class="py-1">${(it.fingerprint||'').slice(0,16)}</td></tr>`).join('') + `</tbody></table>` : '<div class="text-sm text-gray-500">No uploads yet.</div>'}
+                  ${items.length? `<table class="w-full text-sm"><thead><tr class="text-left border-b dark:border-gray-700"><th class="py-1">When</th><th class="py-1">IP</th><th class="py-1">Filename</th><th class="py-1">Size</th><th class="py-1">Fingerprint</th></tr></thead><tbody>` + items.map(it=>`<tr class="border-b dark:border-gray-800"><td class="py-1">${new Date(it.uploadedAt).toLocaleString()}</td><td class="py-1">${esc(it.ip)}</td><td class="py-1" title="${esc(it.userAgent)}">${esc(it.filename)}</td><td class="py-1">${(it.size||0).toLocaleString()}</td><td class="py-1">${esc((it.fingerprint||'').slice(0,16))}</td></tr>`).join('') + `</tbody></table>` : '<div class="text-sm text-gray-500">No uploads yet.</div>'}
                 </div>
               </div>
             </div>`;

@@ -1,3 +1,5 @@
+# Build the image from source instead of pulling it from GHCR:
+#   docker compose -f docker-compose.yml.example up -d --build
 services:
   immich-drop:
     build: .
@@ -7,27 +9,22 @@ services:
       - "8080:8080"
 
     environment:
-      #immich drop server ip
+      # Immich connection (must include /api)
       IMMICH_BASE_URL: https://immich.example.com/api
       IMMICH_API_KEY: ${IMMICH_API_KEY}
 
       PUBLIC_BASE_URL: https://drop.example.com
-      #Enable/Disable Public upload page to folder
-      PUBLIC_UPLOAD_PAGE_ENABLED: false
+      # Enable/Disable the public upload page at /
+      PUBLIC_UPLOAD_PAGE_ENABLED: "false"
       IMMICH_ALBUM_NAME: dead-drop
       # Chunked uploads to bypass 100MB limits (e.g., Cloudflare Tunnel)
-      CHUNKED_UPLOADS_ENABLED: true
-      CHUNK_SIZE_MB: 95
-
+      CHUNKED_UPLOADS_ENABLED: "true"
+      CHUNK_SIZE_MB: "95"
+      SESSION_SECRET: ${SESSION_SECRET}
+      TZ: Europe/Berlin
 
     volumes:
       - immich_drop_data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request,sys\ntry:\n  urllib.request.urlopen('http://localhost:8080/').read(); sys.exit(0)\nexcept Exception:\n  sys.exit(1)\nPY"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
 volumes:
   immich_drop_data:

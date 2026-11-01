@@ -3,6 +3,8 @@
 A tiny web app for collecting photos/videos into your **Immich** server.
 Admin users log in to create public invite links; invite links are always public-by-URL. A public uploader page is optional and disabled by default.
 
+Compatible with **Immich v3** (and v2). Docker images are published to `ghcr.io/voxel07/immich-drop`.
+
 ![Immich Drop Uploader Dark Mode UI](./screenshot.png)
 
 ## Features
@@ -42,11 +44,9 @@ Use a `.env` file only for local development.
 
 ### docker-compose.yml (deploy without .env)
 ```yaml
-version: "3.9"
-
 services:
   immich-drop:
-    image: ghcr.io/nasogaa/immich-drop:latest
+    image: ghcr.io/voxel07/immich-drop:latest
     pull_policy: always
     container_name: immich-drop
     restart: unless-stopped
@@ -70,6 +70,11 @@ services:
       # App internals
       SESSION_SECRET: ${SESSION_SECRET}
 
+      # Timezone for photos whose EXIF date has no offset (default UTC)
+      TZ: Europe/Berlin
+      # Behind a reverse proxy: trust its X-Forwarded-For for uploader IP logging
+      # FORWARDED_ALLOW_IPS: "*"
+
     # Expose the app on the host
     ports:
       - 8080:8080
@@ -78,19 +83,12 @@ services:
     volumes:
       - immich_drop_data:/data
 
-    # Simple healthcheck
-    healthcheck:
-      test: ["CMD-SHELL", "python - <<'PY'\nimport os,urllib.request,sys; url=f\"http://127.0.0.1:{os.getenv('PORT','8080')}/\";\ntry: urllib.request.urlopen(url, timeout=3); sys.exit(0)\nexcept Exception: sys.exit(1)\nPY"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
 volumes:
   immich_drop_data:
 ```
 
-```
+The image ships with a built-in healthcheck. Images are tagged `latest` (main), `X.Y.Z` / `X.Y` (git tags `vX.Y.Z`) and `sha-<commit>`.
+
 ### CLI
 ```bash
 docker compose pull
@@ -99,6 +97,21 @@ docker compose up -d
 ---
 
 ## What's New
+
+### Immich v3 compatibility
+- Upload dates are now sent as timezone-aware ISO 8601 (`...Z`); Immich v3 rejects dates without a timezone
+- EXIF `OffsetTimeOriginal` is honoured; EXIF dates without an offset use the container timezone (`TZ`)
+- Removed `deviceAssetId` / `deviceId` from uploads (dropped in Immich v3)
+- Immich validation errors are shown in the upload queue in readable form
+
+### Fixes
+- Uploads without an invite link are refused unless the public uploader is enabled or you are logged in
+- Chunk uploads can no longer write outside the chunk directory; abandoned chunks are cleaned up after 24h
+- Upload logs ("Details") work again on fresh installs; databases with the broken schema are repaired on start
+- Uploads no longer block the server, so progress updates stream live
+- Invite expiry dates display and save correctly in every timezone
+- Filenames and other uploader-supplied values are escaped in the admin UI
+- Deleting links only removes upload logs of your own links
 
 ### v0.5.0 – Manage Links overhaul
 - In-panel bulk actions footer (Delete/Enable/Disable stay inside the box)
@@ -186,7 +199,7 @@ immich_drop/
 
 ## Requirements
 
-- **Python** 3.11
+- **Python** 3.13
 - An **Immich** server + **API key**
 
 ---
@@ -197,8 +210,17 @@ immich_drop/
 Run with live reload:
 
 ```bash
-python main.py
+RELOAD=true python main.py
 ```
+
+Smoke test (mocked Immich, no server needed):
+
+```bash
+pip install -r requirements.txt httpx
+python tests/smoke_test.py
+```
+
+CI (`.github/workflows/docker-publish.yml`) runs the smoke test and builds a multi-arch image (amd64/arm64), pushing to GHCR on `main` and on `v*` tags.
 
 The backend contains docstrings so you can generate docs later if desired.
 
@@ -250,8 +272,8 @@ You can keep a checked‑in `/.env.example` with the keys above for onboarding.
 2. **De‑dupe (local)** – Server computes **SHA‑1** and checks `state.db`. If seen, marks as **duplicate**.  
 3. **De‑dupe (server)** – Attempts Immich `/assets/bulk-upload-check`; if Immich reports duplicate, marks accordingly.  
 4. **Upload** – Multipart POST to `${IMMICH_BASE_URL}/assets` with:
-   - `assetData`, `deviceAssetId`, `deviceId`,  
-   - `fileCreatedAt`, `fileModifiedAt` (from EXIF when available; else `lastModified`),  
+   - `assetData`,  
+   - `fileCreatedAt`, `fileModifiedAt` as UTC ISO 8601 (from EXIF when available; else the browser's `lastModified`),  
    - `isFavorite=false`, `filename`, and header `x-immich-checksum`.  
 5. **Album** – If `IMMICH_ALBUM_NAME` is configured, adds the uploaded asset to the album (creates album if it doesn't exist).  
 6. **Progress** – Backend streams progress via WebSocket to the same session.  
@@ -266,7 +288,8 @@ You can keep a checked‑in `/.env.example` with the keys above for onboarding.
 - The default uploader page at `/` is disabled unless `PUBLIC_UPLOAD_PAGE_ENABLED=true`.  
 - The Immich API key remains **server‑side**; the browser never sees it.  
 - No browsing of uploaded media; only ephemeral session state is shown.  
-- Run behind HTTPS with a reverse proxy and restrict CORS to your domain(s).
+- Run behind HTTPS with a reverse proxy. The app serves its own UI, so no CORS headers are sent.
+- Set a fixed `SESSION_SECRET`; otherwise logins and invite-password unlocks reset on every restart.
 
 ## Usage flow
 

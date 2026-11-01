@@ -1,7 +1,8 @@
 .env
 *.env
+!.env.example
 agent.md
-docker-compose.yml
+docker-compose.override.yml
 # Python cache and build artifacts
 __pycache__/
 app/__pycache__/*
