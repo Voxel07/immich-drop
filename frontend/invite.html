@@ -11,7 +11,16 @@
   </script>
   <style>
     body { transition: background-color .2s ease, color .2s ease; padding-bottom: env(safe-area-inset-bottom); }
+    /* Link details stay hidden until the invite is loaded, and for good on simple pages */
+    html:not(.info-ready) .details, html.simple .details { display: none !important; }
   </style>
+  <script>
+    // ?simple=1 forces the simple page (e.g. when embedding in an iframe)
+    (function(){
+      const v = new URLSearchParams(location.search).get('simple');
+      if (v !== null && !/^(0|false|no|off)$/i.test(v)) document.documentElement.classList.add('simple');
+    })();
+  </script>
   <meta name="robots" content="noindex, nofollow" />
   <meta http-equiv="Cache-Control" content="no-store" />
   <meta http-equiv="Pragma" content="no-cache" />
@@ -20,7 +29,7 @@
   <div class="mx-auto max-w-4xl p-6 space-y-6">
     <div id="topBanner" class="hidden rounded-2xl border border-green-200 bg-green-50 p-3 text-green-700 text-center dark:bg-green-900 dark:border-green-700 dark:text-green-300"></div>
 
-    <header class="flex items-center justify-between flex-wrap gap-2">
+    <header class="details flex items-center justify-between flex-wrap gap-2">
       <h1 class="text-2xl font-semibold tracking-tight">Immich Drop Uploader</h1>
       <div class="flex items-center gap-2">
         <a id="linkHome" href="/" class="hidden rounded-xl border px-3 py-1 text-sm dark:border-gray-600">Home</a>
@@ -38,7 +47,7 @@
     </header>
 
     <!-- Link information -->
-    <section id="linkInfo" class="rounded-2xl border bg-white dark:bg-gray-800 dark:border-gray-700 p-4 text-sm">
+    <section id="linkInfo" class="details rounded-2xl border bg-white dark:bg-gray-800 dark:border-gray-700 p-4 text-sm">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <div>
           <div><b>Status:</b> <span id="liStatus">Loading…</span></div>
@@ -100,7 +109,7 @@
     </section>
 
     <section id="items" class="space-y-3"></section>
-    <footer class="pt-4 pb-10 text-center text-xs text-gray-500 dark:text-gray-400">
+    <footer class="details pt-4 pb-10 text-center text-xs text-gray-500 dark:text-gray-400">
       Invite upload page
     </footer>
   </div>
@@ -123,6 +132,8 @@
       const token = parts[1];
       const r = await fetch(`/api/invite/${token}`);
       const j = await r.json();
+      if (j.simple) document.documentElement.classList.add('simple');
+      document.documentElement.classList.add('info-ready');
       const fmt = (s)=> s ? new Date(s).toLocaleString() : '—';
       document.getElementById('liAlbum').textContent = j.albumName || j.albumId || '—';
       document.getElementById('liType').textContent = j.oneTime ? 'One-time' : (j.maxUses < 0 ? 'Indefinite' : `Up to ${j.maxUses} uses`);
@@ -171,7 +182,9 @@
         fi.disabled = true;
         itemsEl.innerHTML = `<div class="text-sm text-gray-500">This link is not active${j.inactiveReason?` (${j.inactiveReason})`:''}.</div>`;
       }
-    } catch {}
+    } catch {
+      document.documentElement.classList.add('info-ready');
+    }
   })();
   // Hook theme/ping
   (function(){

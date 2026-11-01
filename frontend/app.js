@@ -362,6 +362,8 @@ if (btnPing) btnPing.onclick = async () => {
     const r = await fetch(`/api/invite/${INVITE_TOKEN}`);
     if (!r.ok) return;
     const j = await r.json();
+    // Simple pages show no link details
+    if (j.simple || document.documentElement.classList.contains('simple')) return;
     const parts = [];
     if (j.albumName) parts.push(`Uploading to album: "${j.albumName}"`);
     if (j.expiresAt) parts.push(`Expires: ${new Date(j.expiresAt).toLocaleString()}`);

@@ -92,6 +92,13 @@ results.append(ok(r.status_code == 200, "login"))
 r = client.post("/api/invites", json={"albumName": "Party", "maxUses": 5, "expiresDays": 3})
 inv = r.json(); token = inv["token"]
 results.append(ok(r.status_code == 200 and inv["expiresAt"].endswith("Z"), f"invite created, expiresAt={inv['expiresAt']}"))
+r = client.post("/api/invites", json={"albumId": "a1", "albumName": "Picked", "maxUses": -1, "simple": True})
+simple_token = r.json()["token"]
+info = client.get(f"/api/invite/{simple_token}").json()
+results.append(ok(info["simple"] is True and info["albumName"] == "Picked", f"simple invite keeps album name: {info['simple']}, {info['albumName']}"))
+client.patch(f"/api/invite/{simple_token}", json={"simple": False})
+results.append(ok(client.get(f"/api/invite/{simple_token}").json()["simple"] is False, "simple page toggled off"))
+client.post("/api/invites/delete", json={"tokens": [simple_token]})
 client.post("/api/logout")
 
 # 4. Invite upload with EXIF + offset -> UTC with Z, no deviceAssetId

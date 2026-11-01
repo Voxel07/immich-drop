@@ -11,7 +11,7 @@
   </script>
 </head>
 <body class="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
-  <div class="mx-auto max-w-2xl p-6 space-y-6">
+  <div class="mx-auto max-w-6xl p-6 space-y-6">
     <div id="topBanner" class="hidden rounded-2xl border border-green-200 bg-green-50 p-3 text-green-700 text-center dark:bg-green-900 dark:border-green-700 dark:text-green-300"></div>
     <header class="flex items-center justify-between">
       <h1 class="text-2xl font-semibold">Create Upload Link</h1>
@@ -63,6 +63,11 @@
           <div class="mt-1 text-xs text-gray-500">Recipients must enter this password before uploading.</div>
         </div>
       </div>
+      <label class="flex items-start gap-2 text-sm cursor-pointer">
+        <input id="simplePage" type="checkbox" class="mt-1"/>
+        <span><span class="font-medium">Simple page</span>
+          <span class="block text-xs text-gray-500">Recipients only see the upload area: no title bar, album, expiry or usage details. Also available on any link by adding <code>?simple=1</code> (e.g. for embedding in an iframe).</span></span>
+      </label>
       <div>
         <button id="btnCreate" class="w-full sm:w-auto rounded-xl bg-black text-white px-5 py-3 dark:bg-white dark:text-black">Create link</button>
       </div>
@@ -98,12 +103,12 @@
         <table class="w-full text-sm">
           <thead>
             <tr class="text-left border-b dark:border-gray-700">
-              <th class="py-2"><input id="chkAll" type="checkbox"/></th>
-              <th class="py-2" style="width: 45%;">Name</th>
-              <th class="py-2" style="width: 18%;">Status</th>
-              <th class="py-2">Uses</th>
-              <th class="py-2">Expires</th>
-              <th class="py-2">Album</th>
+              <th class="py-2 pr-3"><input id="chkAll" type="checkbox"/></th>
+              <th class="py-2 pr-3">Name</th>
+              <th class="py-2 pr-3">Status</th>
+              <th class="py-2 pr-3">Uses</th>
+              <th class="py-2 pr-3">Expires</th>
+              <th class="py-2 pr-3">Album</th>
               <th class="py-2">Actions</th>
             </tr>
           </thead>
@@ -192,7 +197,13 @@
       const payload = { maxUses: parseInt(usage.value, 10) };
       const d = days.value.trim();
       if (d) payload.expiresDays = parseInt(d, 10);
-      if (albumId) payload.albumId = albumId; else if (albumName) payload.albumName = albumName;
+      if (albumId) {
+        payload.albumId = albumId;
+        // Store the name too, so the invite page doesn't show a bare album id
+        const opt = albumSelect.options[albumSelect.selectedIndex];
+        if (opt && opt.textContent) payload.albumName = opt.textContent;
+      } else if (albumName) payload.albumName = albumName;
+      if (document.getElementById('simplePage').checked) payload.simple = true;
       const pw = (passwordInput && passwordInput.value) ? passwordInput.value.trim() : '';
       if (pw) payload.password = pw;
       try{
@@ -277,16 +288,16 @@
         const url = location.origin + '/invite/' + row.token;
         return `
           <tr class="border-b dark:border-gray-800" data-token="${row.token}">
-            <td class="py-2"><input class="chkRow" type="checkbox" data-token="${row.token}"/></td>
-            <td class="py-2" style="width:45%;">
-              <input class="inName w-full rounded border px-2 py-1 bg-white dark:bg-gray-900 dark:border-gray-700" data-token="${row.token}" value="${esc(row.name)}" title="${esc(row.name)}"/>
+            <td class="py-2 pr-3"><input class="chkRow" type="checkbox" data-token="${row.token}"/></td>
+            <td class="py-2 pr-3">
+              <input class="inName w-full min-w-[14rem] rounded border px-2 py-1 bg-white dark:bg-gray-900 dark:border-gray-700" data-token="${row.token}" value="${esc(row.name)}" title="${esc(row.name)}"/>
             </td>
-            <td class="py-2">${status}</td>
-            <td class="py-2">${uses}</td>
-            <td class="py-2">
+            <td class="py-2 pr-3 whitespace-nowrap">${status}</td>
+            <td class="py-2 pr-3 whitespace-nowrap">${uses}</td>
+            <td class="py-2 pr-3">
               <input class="inExpires w-36 rounded border px-2 py-1 bg-white dark:bg-gray-900 dark:border-gray-700" type="date" data-token="${row.token}" value="${row.expiresAt? localDateStr(row.expiresAt):''}" title="${row.expiresAt? new Date(row.expiresAt).toLocaleString():''}"/>
             </td>
-            <td class="py-2">${row.albumName ? esc(row.albumName) : '—'}</td>
+            <td class="py-2 pr-3 min-w-[8rem]">${row.albumName ? esc(row.albumName) : '—'}</td>
             <td class="py-2">
               <div class="flex items-center gap-1 whitespace-nowrap">
                 <button class="btnDetails group relative rounded-xl border px-2 py-1 text-xs dark:border-gray-600 inline-flex items-center" data-token="${row.token}" aria-label="Show details">
@@ -304,6 +315,10 @@
                 <button class="btnCopyLink group relative rounded-xl border px-2 py-1 text-xs dark:border-gray-600 inline-flex items-center" data-url="${url}" aria-label="Copy link">
                   <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14h13a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
                   <span class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded bg-black text-white text-xs px-2 py-1 opacity-0 group-hover:opacity-100 dark:bg-gray-700">Copy</span>
+                </button>
+                <button class="btnSimple group relative rounded-xl border px-2 py-1 text-xs dark:border-gray-600 inline-flex items-center ${row.simple ? 'bg-blue-100 border-blue-400 text-blue-800 dark:bg-blue-900/40 dark:border-blue-500 dark:text-blue-300' : ''}" data-token="${row.token}" data-simple="${row.simple ? '1' : '0'}" aria-label="Toggle simple page" aria-pressed="${row.simple ? 'true' : 'false'}">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 2v12h16V6H4zm8 2l4 4h-3v4h-2v-4H8l4-4z"/></svg>
+                  <span class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-black text-white text-xs px-2 py-1 opacity-0 group-hover:opacity-100 dark:bg-gray-700">Simple page: ${row.simple ? 'on' : 'off'}</span>
                 </button>
                 <button class="btnSave group relative rounded-xl border px-2 py-1 text-xs dark:border-gray-600 inline-flex items-center opacity-50 cursor-not-allowed" data-token="${row.token}" aria-label="Save changes" disabled>
                   <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7a2 2 0 0 0-2 2v14l7-3 7 3V5a2 2 0 0 0-2-2zM7 5h10v10l-5-2-5 2V5z"/></svg>
@@ -356,6 +371,15 @@
         } else { payload.expiresAt = null; }
         try{
           const r = await fetch(`/api/invite/${token}`, { method:'PATCH', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(payload) });
+          if (!r.ok) throw new Error('Update failed');
+          await loadInvites();
+        }catch(e){ showResult('err', String(e.message||e)); }
+      });
+      invitesTBody.querySelectorAll('.btnSimple').forEach(btn => btn.onclick = async ()=>{
+        const token = btn.getAttribute('data-token');
+        const simple = btn.getAttribute('data-simple') !== '1';
+        try{
+          const r = await fetch(`/api/invite/${token}`, { method:'PATCH', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify({ simple }) });
           if (!r.ok) throw new Error('Update failed');
           await loadInvites();
         }catch(e){ showResult('err', String(e.message||e)); }

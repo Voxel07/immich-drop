@@ -98,6 +98,11 @@ docker compose up -d
 
 ## What's New
 
+### Simple page
+- Per-link option (checkbox when creating, toggle button in Manage Links) that hides the title bar, link details and info banners, so recipients only see the upload area
+- Works on any link by appending `?simple=1`, e.g. to embed the uploader in an iframe (password-protected links need the page on the same site, as the unlock is stored in a cookie)
+- Album names are now stored for albums picked from the list, instead of showing the album id
+
 ### Immich v3 compatibility
 - Upload dates are now sent as timezone-aware ISO 8601 (`...Z`); Immich v3 rejects dates without a timezone
 - EXIF `OffsetTimeOriginal` is honoured; EXIF dates without an offset use the container timezone (`TZ`)

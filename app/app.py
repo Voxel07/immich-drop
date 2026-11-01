@@ -1061,6 +1061,11 @@ def ensure_invites_table() -> None:
             cur.execute("ALTER TABLE invites ADD COLUMN disabled INTEGER DEFAULT 0")
         except Exception:
             pass
+        # Simple page: hide link details on the invite page for recipients
+        try:
+            cur.execute("ALTER TABLE invites ADD COLUMN simple INTEGER DEFAULT 0")
+        except Exception:
+            pass
         conn.commit()
         conn.close()
     except Exception as e:
@@ -1083,6 +1088,7 @@ async def api_invites_create(request: Request) -> JSONResponse:
     max_uses = (body or {}).get("maxUses", 1)
     invite_password = (body or {}).get("password")
     expires_days = (body or {}).get("expiresDays")
+    simple = 1 if (body or {}).get("simple") else 0
     # Normalize max_uses
     try:
         max_uses = int(max_uses)
@@ -1135,13 +1141,13 @@ async def api_invites_create(request: Request) -> JSONResponse:
         cur = conn.cursor()
         if pw_hash:
             cur.execute(
-                "INSERT INTO invites (token, album_id, album_name, max_uses, expires_at, password_hash, owner_user_id, owner_email, owner_name, name) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (token, resolved_album_id, album_name, max_uses, expires_at, pw_hash, owner_user_id, owner_email, owner_name, default_link_name)
+                "INSERT INTO invites (token, album_id, album_name, max_uses, expires_at, password_hash, owner_user_id, owner_email, owner_name, name, simple) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (token, resolved_album_id, album_name, max_uses, expires_at, pw_hash, owner_user_id, owner_email, owner_name, default_link_name, simple)
             )
         else:
             cur.execute(
-                "INSERT INTO invites (token, album_id, album_name, max_uses, expires_at, owner_user_id, owner_email, owner_name, name) VALUES (?,?,?,?,?,?,?,?,?)",
-                (token, resolved_album_id, album_name, max_uses, expires_at, owner_user_id, owner_email, owner_name, default_link_name)
+                "INSERT INTO invites (token, album_id, album_name, max_uses, expires_at, owner_user_id, owner_email, owner_name, name, simple) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (token, resolved_album_id, album_name, max_uses, expires_at, owner_user_id, owner_email, owner_name, default_link_name, simple)
             )
         conn.commit()
         conn.close()
@@ -1163,7 +1169,8 @@ async def api_invites_create(request: Request) -> JSONResponse:
         "albumName": album_name,
         "maxUses": max_uses,
         "expiresAt": as_utc_iso(expires_at),
-        "name": default_link_name
+        "name": default_link_name,
+        "simple": bool(simple),
     })
 
 @app.get("/api/invites")
@@ -1195,7 +1202,7 @@ async def api_invites_list(request: Request) -> JSONResponse:
             like = f"%{q}%"
             cur.execute(
                 """
-                SELECT token, name, album_id, album_name, max_uses, used_count, expires_at, COALESCE(claimed,0), COALESCE(disabled,0), created_at
+                SELECT token, name, album_id, album_name, max_uses, used_count, expires_at, COALESCE(claimed,0), COALESCE(disabled,0), created_at, COALESCE(simple,0)
                 FROM invites
                 WHERE owner_user_id = ? AND (
                     COALESCE(name,'') LIKE ? OR COALESCE(album_name,'') LIKE ? OR token LIKE ?
@@ -1205,7 +1212,7 @@ async def api_invites_list(request: Request) -> JSONResponse:
             )
         else:
             cur.execute(
-                f"SELECT token, name, album_id, album_name, max_uses, used_count, expires_at, COALESCE(claimed,0), COALESCE(disabled,0), created_at FROM invites WHERE owner_user_id = ? ORDER BY {sort_sql}",
+                f"SELECT token, name, album_id, album_name, max_uses, used_count, expires_at, COALESCE(claimed,0), COALESCE(disabled,0), created_at, COALESCE(simple,0) FROM invites WHERE owner_user_id = ? ORDER BY {sort_sql}",
                 (owner_user_id,)
             )
         rows = cur.fetchall()
@@ -1214,7 +1221,7 @@ async def api_invites_list(request: Request) -> JSONResponse:
         logger.exception("List invites failed: %s", e)
         return JSONResponse({"error": "db_error"}, status_code=500)
     items = []
-    for (token, name, album_id, album_name, max_uses, used_count, expires_at, claimed, disabled, created_at) in rows:
+    for (token, name, album_id, album_name, max_uses, used_count, expires_at, claimed, disabled, created_at, simple) in rows:
         try:
             max_uses_int = int(max_uses) if max_uses is not None else -1
         except Exception:
@@ -1252,12 +1259,13 @@ async def api_invites_list(request: Request) -> JSONResponse:
             "active": active,
             "inactiveReason": inactive_reason,
             "createdAt": as_utc_iso(created_at),
+            "simple": bool(simple),
         })
     return JSONResponse({"items": items})
 
 @app.patch("/api/invite/{token}")
 async def api_invite_update(token: str, request: Request) -> JSONResponse:
-    """Update invite fields: name, disabled, maxUses, expiresAt/expiresDays, password, resetUsage."""
+    """Update invite fields: name, disabled, simple, maxUses, expiresAt/expiresDays, password, resetUsage."""
     if not request.session.get("accessToken"):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     try:
@@ -1280,6 +1288,10 @@ async def api_invite_update(token: str, request: Request) -> JSONResponse:
             disabled = 0
         fields.append("disabled = ?")
         params.append(disabled)
+    # Simple page toggle
+    if "simple" in (body or {}):
+        fields.append("simple = ?")
+        params.append(1 if (body or {}).get("simple") else 0)
     # Max uses
     if "maxUses" in (body or {}):
         try:
@@ -1465,7 +1477,7 @@ async def api_invite_info(token: str, request: Request) -> JSONResponse:
     try:
         conn = sqlite3.connect(SETTINGS.state_db)
         cur = conn.cursor()
-        cur.execute("SELECT token, album_id, album_name, max_uses, used_count, expires_at, COALESCE(claimed,0), claimed_at, password_hash, COALESCE(disabled,0), name FROM invites WHERE token = ?", (token,))
+        cur.execute("SELECT token, album_id, album_name, max_uses, used_count, expires_at, COALESCE(claimed,0), claimed_at, password_hash, COALESCE(disabled,0), name, COALESCE(simple,0) FROM invites WHERE token = ?", (token,))
         row = cur.fetchone()
         conn.close()
     except Exception as e:
@@ -1473,7 +1485,7 @@ async def api_invite_info(token: str, request: Request) -> JSONResponse:
         return JSONResponse({"error": "db_error"}, status_code=500)
     if not row:
         return JSONResponse({"error": "not_found"}, status_code=404)
-    _, album_id, album_name, max_uses, used_count, expires_at, claimed, claimed_at, password_hash, disabled, link_name = row
+    _, album_id, album_name, max_uses, used_count, expires_at, claimed, claimed_at, password_hash, disabled, link_name, simple = row
     # compute remaining
     remaining = None
     try:
@@ -1531,6 +1543,7 @@ async def api_invite_info(token: str, request: Request) -> JSONResponse:
         "inactiveReason": (None if active else (reason or "inactive")),
         "passwordRequired": password_required,
         "authorized": authorized,
+        "simple": bool(simple),
     })
 
 @app.post("/api/invite/{token}/auth")
